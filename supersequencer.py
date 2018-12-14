@@ -5,7 +5,7 @@ from copy import deepcopy
 class Point:
     def __init__(self, seq_point=None):
         if isinstance(seq_point, dict):
-            self.id = seq_point.get('tsn', seq_point)  # identifier Name of object
+            self.id = seq_point.get('stop_id', seq_point)  # identifier Name of object
         else:
             self.id = seq_point
         self.data = seq_point  # data of sequence
@@ -141,9 +141,12 @@ def supersequence(sequences_list):
         for k, v in enumerate(tmp_sequences):
             super_sequence.insert(i+k, v)
 
-    # TODO: Weighting shift single orphaned stops closer to previous sequence segment. What others weightings todo?
-    ttt = 10  # number of passes.
-    while ttt > 0:
+    # TODO: What others weightings todo?
+    
+    # TODO:  Weighting shift single orphaned stops closer to previous sequence segments.
+    # number of passes x10. Not the best way to solve this just the least effort method.....
+    ttt = 10  
+    while ttt > 0:  
         ttt -= 1
         shift1 = []
         for i, x in enumerate(super_sequence):
