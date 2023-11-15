@@ -2,165 +2,133 @@ import itertools
 from copy import deepcopy
 
 
-class Point:
-    def __init__(self, seq_point=None):
-        if isinstance(seq_point, dict):
-            self.id = seq_point.get('stop_id', seq_point)  # identifier Name of object
-        else:
-            self.id = seq_point
-        self.data = seq_point  # data of sequence
-        self.start = False  # Flag if Point is the First Point of any sub_sequence
-        self.end = False  # Flag if Point is the End Point of any sub_sequence
-        self.prev = []  # List of Points that preceded current
-        self.next = []  # List of Points that follows current
+class Node:
+    def __init__(self, key: str | int, data=None):
+        self.id = key
+        self.data = data
+        self.start: bool = False
+        self.end: bool = False
+        self.prev = set()
+        self.next = set()
 
     def __repr__(self):
         return str(self.id)
 
     def __eq__(self, other):
-        return other.id == self.id if isinstance(other, Point) else self.id == other
+        return other.id == self.id if isinstance(other, Node) else self.id == other
+
+    def __hash__(self):
+        return hash(self.id)
 
 
-def supersequence(sequences_list):
-    """ Generates common super sequence """
+def is_super_sequence(short_seq: list, long_seq: list) -> bool:
+    it = iter(long_seq)
+    return all(item in it for item in short_seq)
 
-    def is_supersequence(xs, ys):
-        """ True if y is supersequence of x """
-        idx = 0
-        try:
-            for item in ys:
-                idx = xs.index(item, idx) + 1
-        except ValueError:
-            return False
-        return True
 
-    def eliminate_redundant_sequences(seqs):
-        """ Remove Redundant sequences (duplicates and is_super_sequence matches)"""
-        redundant_sequences = []
-        seqs.sort(key=lambda xs: len(xs))
-        for idx, req_red in enumerate(seqs):
-            if idx not in redundant_sequences:
-                for j in range(idx+1, len(seqs)):
-                    if req_red == seqs[j]:
-                        redundant_sequences.append(idx)
-                        break
-                    elif is_supersequence(seqs[j], req_red):
-                        redundant_sequences.append(idx)
-                        break
-        return [vx for ix, vx in enumerate(seqs) if ix not in redundant_sequences]
+def eliminate_redundant_sequences(sequences: list) -> list:
+    sequences.sort(key=len)
+    result = []
+    for sequence in sequences:
+        if not any(is_super_sequence(sequence, other) for other in result):
+            result.append(sequence)
+    return result
 
-    def get_allpoints(seqs):
-        """ get all points in all sequences flag start\end - list prev and next points in sequence """
-        prev_point = None
-        points = []
-        for seq_ap in seqs:
-            for ix, point in enumerate(seq_ap):
-                if point not in points:
-                    points.append(point)
-                    index = len(points)-1
-                else:
-                    index = points.index(point)
 
-                if ix == 0:
-                    points[index].start = True
-                    prev_point = None
+def get_all_nodes(sequences: list) -> list[Node]:
+    nodes = {}
+    for sequence in sequences:
+        for i, node_id in enumerate(sequence):
+            node = nodes.setdefault(node_id, Node(node_id))
+            if i == 0:
+                node.start = True
+            if i == len(sequence) - 1:
+                node.end = True
+            if i > 0:
+                prev_node_id = sequence[i - 1]
+                node.prev.add(prev_node_id)
+                nodes[prev_node_id].next.add(node_id)
+    return list(nodes.values())
 
-                if ix == len(seq_ap)-1:
-                    points[index].end = True
 
-                if ix > 0:
-                    if prev_point is not None:
-                        if prev_point not in points[index].prev:
-                            points[index].prev.append(prev_point)
+def get_sections(all_nodes: list[Node], sequences: list) -> list:
+    """groups sequences into sub sequence sections based on all nodes start, end nodes flags
+    previous, next node counts. """
+    sections = []
+    for i, seq_section in enumerate(sequences):
+        sub_seq = []
+        sections.append([])
+        for p in seq_section:
+            node = all_nodes[all_nodes.index(p)]
+            if (len(node.prev) > 1 or node.start or (node.end and node.next)) and sub_seq:
+                sections[i].append(sub_seq)
+                sub_seq = [node]
+            else:
+                sub_seq.append(node)
+            if (len(node.next) > 1 or node.end) and sub_seq:
+                sections[i].append(sub_seq)
+                sub_seq = []
 
-                        if point not in points[points.index(prev_point)].next:
-                            points[points.index(prev_point)].next.append(point)
-                prev_point = point
-        return points
+    return sorted(sections, key=len, reverse=True)
 
-    def get_sections(allpoints, seq1):
-        """groups sequences into sub sequence sections based on all points start, end points flags
-        previous, next point counts. """
-        seq_list = []
-        for ix, seq_section in enumerate(seq1):
-            sub_seq = []
-            seq_list.append([])
-            for p in seq_section:
-                point = allpoints[allpoints.index(p)]
-                if (len(point.prev) > 1 or point.start or (point.end and point.next)) and sub_seq:
-                    seq_list[ix].append(sub_seq)
-                    sub_seq = [point]
-                else:
-                    sub_seq.append(point)
-                if (len(point.next) > 1 or point.end) and sub_seq:
-                    seq_list[ix].append(sub_seq)
-                    sub_seq = []
 
-        seq_list = sorted(seq_list, key=lambda xx: len(xx), reverse=True)  # Sorts by how many junctions each trip has..
-        # return seq_list
-        # try:
-        #    return sorted(seq_list, key=lambda x: len(x[0][-1].next[0].prev), reverse=False)
-        # except:
+def shift_orphans(super_seq: list) -> list:
+    for _ in range(10):
+        shifted = False
+        for i in range(1, len(super_seq)):
+            if len(super_seq[i]) == 1 and not super_seq[i][0].start:
+                prev_node = super_seq[i - 1][-1]
+                if prev_node not in super_seq[i][0].prev:
+                    super_seq[i - 1], super_seq[i] = super_seq[i], super_seq[i - 1]
+                    shifted = True
+                    break
+        if not shifted:
+            break
+    return super_seq
 
-        return seq_list
 
-    def remove_duplicates(seqs):
-        toremove = []  # build list to remove
-        for point in seqs:
-            multi = [index for index, value in enumerate(seqs) if value == point]
-            if len(multi) > 1:
-                if all([True
-                        if n in seqs[multi[-1]:] and n not in seqs[multi[0]:multi[-1]]
-                        else False for n in point.next]) and multi[0] not in toremove:
-                    toremove.append(multi[0])
-        # remove
-        for index, value in enumerate(toremove):
-            seqs.pop(toremove[index]-index)
-        return seqs
+def remove_duplicates(sequences: list) -> list:
+    to_remove = []  # build list to remove
+    for node in sequences:
+        multi = [index for index, value in enumerate(sequences) if value == node]
+        if len(multi) > 1:
+            if all([True
+                    if n in sequences[multi[-1]:] and n not in sequences[multi[0]:multi[-1]]
+                    else False for n in node.next]) and multi[0] not in to_remove:
+                to_remove.append(multi[0])
+    # remove
+    for index, value in enumerate(to_remove):
+        sequences.pop(to_remove[index] - index)
+    return sequences
 
-    sequences = eliminate_redundant_sequences([[Point(p) for p in s] for s in sequences_list])
 
-    all_points = get_allpoints(sequences)
-    subsequences_list = get_sections(all_points, sequences)
+def super_sequence(sequences_list):
+
+    sequences = eliminate_redundant_sequences([[node for node in seq] for seq in sequences_list])
+
+    all_nodes = get_all_nodes(sequences)
+    subsequences_list = get_sections(all_nodes, sequences)
 
     super_sequence = []
     for sequence in subsequences_list:
-        i = 0  # position index
+        i = 0
         tmp_sequences = []
         for sub_sequence in sequence:
-            try:  # EAFP
+            try:
                 i = super_sequence.index(sub_sequence, i) + 1
                 for sub in tmp_sequences:
-                    super_sequence.insert(i-1, sub)
+                    super_sequence.insert(i - 1, sub)
                     i += 1
                 tmp_sequences = []
-            except ValueError:  # [x] not in list
+            except ValueError:
                 tmp_sequences.append(sub_sequence)
 
-        # remaining sub sequences insert inline
         for k, v in enumerate(tmp_sequences):
-            super_sequence.insert(i+k, v)
+            super_sequence.insert(i + k, v)
 
-    # TODO: What others weightings todo?
-    
-    # TODO:  Weighting shift single orphaned stops closer to previous sequence segments.
-    # number of passes x10. Not the best way to solve this just the least effort method.....
-    ttt = 10  
-    while ttt > 0:  
-        ttt -= 1
-        shift1 = []
-        for i, x in enumerate(super_sequence):
-            if len(x) == 1 and not x[0].start and i > 0:
-                if super_sequence[i-1][-1] not in x[0].prev:
-                    shift1.append(i)
-                    break
-        if shift1:
-            for x in shift1:
-                super_sequence[x-1], super_sequence[x] = super_sequence[x], super_sequence[x-1]
-        else:
-            break
+    super_sequence = shift_orphans(super_sequence)
 
-    final = remove_duplicates([deepcopy(t) for t in list(itertools.chain(*super_sequence))])
+    final = [deepcopy(t) for t in list(itertools.chain(*super_sequence))]
     return final
 
 
@@ -168,9 +136,10 @@ if __name__ == '__main__':
     seq = [
         ['20006', '20471', '211158', '20462', '20461', '21371', '21122', '21141', '21271', '21151'],
         ['2000442', '21271'],
+        ['20006', '2000442', '21271'],
         ['20006', '20471', '211158', '20462', '20461', '21371', '21122', '21141', '21271'],
         ['20006', '2000442', '20009', '20471', '211158', '20462', '20461', '21371', '21122', '21141', '21271'],
         ['20005', '2000442', '20009', '20471', '211158', '20462', '20461', '21371', '21122', '21141', '21271']
 
     ]
-    print(supersequence(seq))
+    print(super_sequence(seq))
