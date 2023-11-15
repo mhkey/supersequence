@@ -1,5 +1,4 @@
 import itertools
-from copy import deepcopy
 
 
 class Node:
@@ -128,18 +127,4 @@ def super_sequence(sequences_list):
 
     super_sequence = shift_orphans(super_sequence)
 
-    final = [deepcopy(t) for t in list(itertools.chain(*super_sequence))]
-    return final
-
-
-if __name__ == '__main__':
-    seq = [
-        ['20006', '20471', '211158', '20462', '20461', '21371', '21122', '21141', '21271', '21151'],
-        ['2000442', '21271'],
-        ['20006', '2000442', '21271'],
-        ['20006', '20471', '211158', '20462', '20461', '21371', '21122', '21141', '21271'],
-        ['20006', '2000442', '20009', '20471', '211158', '20462', '20461', '21371', '21122', '21141', '21271'],
-        ['20005', '2000442', '20009', '20471', '211158', '20462', '20461', '21371', '21122', '21141', '21271']
-
-    ]
-    print(super_sequence(seq))
+    return list(itertools.chain(*super_sequence))
